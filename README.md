@@ -15,7 +15,7 @@ cargo install procrec
 ### Help
 
 ``` 
-procrec -h`
+$ procrec -h
 procrec 0.1.0
 Lars Baumgaertner
 Process recorded to log cpu utilization and memory consumption
