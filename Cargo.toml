@@ -1,0 +1,20 @@
+[package]
+name = "procrec"
+version = "0.1.0"
+authors = ["Lars Baumgaertner"]
+description = "Record/Plot cpu and memory usage of processes"
+edition = "2018"
+license = " GPL-3.0-or-later"
+categories = ["command-line-utilities"]
+repository    = "https://github.com/gh0st42/procrec"
+keywords = ["cli", "process-monitoring"]
+exclude = [".vscode/", ".travis.yml"]
+readme = "README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { git = "https://github.com/clap-rs/clap/" }
+procfs = "0.7.7"
+tempfile = "3.1.0"
+ctrlc = "3.1.4"
