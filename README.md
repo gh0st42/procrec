@@ -6,9 +6,18 @@ Currently, limited to linux but support for macOS might come in the future. Resu
 
 ## Installation
 
+Unfortunately, clap 3.0 is not yet published to *crates.io*. Thus, the following does not work (yet):
 ```
 cargo install procrec
 ```
+
+Therefore, manual installation from github is required:
+```
+$ git clone https://github.com/gh0st42/procrec
+$ cargo install --path .
+```
+
+If you want plotting functionality you also need to install gnuplot via your package manager (e.g., `sudo apt install gnuplot`).
 
 ## Usage
 
@@ -64,3 +73,7 @@ Afterwards a gnuplot window pops up and visualizes the data:
 
 ![gnuplot screenshot](/img/gnuplot.png?raw=true "gnuplot screenshot")
 
+## Alternatives
+
+- `pidstat` from the [sysstat package](https://github.com/sysstat/sysstat/) for pure recording, no plotting - written in C and probably available in most distro package managers
+- [psrecord](https://github.com/astrofrog/psrecord) a nice python tool for recording and plotting (using `matplotlib`) - installation via `pip` 
