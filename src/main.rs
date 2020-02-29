@@ -27,7 +27,7 @@ use std::time::SystemTime;
 use std::{thread, time};
 use tempfile::NamedTempFile;
 
-/// Process recorded to log cpu utilization and memory consumption.
+/// Process recorder to log cpu utilization and memory consumption.
 #[derive(Clap)]
 #[clap(version = crate_version!(), author = crate_authors!())]
 struct Opts {
@@ -53,7 +53,7 @@ struct Opts {
 struct Sample {
     ts: f32,
     pid: u32,
-    //num_threads: u64,
+    //num_threads: u64, // currently not supported in psutil crate
     cpu: f32,
     vsize: u64,
     rss: u64,
@@ -103,7 +103,7 @@ fn main() {
     let opts: Opts = Opts::parse();
 
     // SETUP phase
-    let mut pid_proc = Process::new(opts.pid).expect("Failed getting process");
+    let mut pid_proc = Process::new(opts.pid).expect("Failed accessing process");
     let _percent_cpu = pid_proc.cpu_percent();
     let sample_rate = opts.interval * 1000;
 
