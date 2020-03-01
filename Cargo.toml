@@ -1,6 +1,6 @@
 [package]
 name = "procrec"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Lars Baumgaertner"]
 description = "Record/Plot cpu and memory usage of processes"
 edition = "2018"

@@ -47,6 +47,9 @@ struct Opts {
     /// Display graph using gnuplot
     #[clap(short = "g", long = "graph")]
     graph: bool,
+    /// Just print gnuplot script
+    #[clap(short = "t", long = "print-gnuplot")]
+    script_dump: bool,
 }
 
 #[derive(Debug)]
@@ -101,6 +104,12 @@ fn gnuplot_recording(recording: &[Sample]) -> Result<()> {
 }
 fn main() {
     let opts: Opts = Opts::parse();
+
+    if opts.script_dump {
+        let gnuplot_script_content = include_str!("../recording.plot");
+        println!("{}", gnuplot_script_content);
+        std::process::exit(0);
+    }
 
     // SETUP phase
     let mut pid_proc = Process::new(opts.pid).expect("Failed accessing process");
