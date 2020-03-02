@@ -25,18 +25,19 @@ If you want plotting functionality you also need to install gnuplot via your pac
 
 ``` 
 $ procrec -h
-procrec 0.1.0
+procrec 0.2.2
 Lars Baumgaertner
-Process recorded to log cpu utilization and memory consumption
+Process recorder to log cpu utilization and memory consumption
 
 USAGE:
     procrec [FLAGS] [OPTIONS] --pid <pid>
 
 FLAGS:
-    -g, --graph      Display graph using gnuplot
-    -h, --help       Prints help information
-    -v, --verbose    A level of verbosity, and can be used multiple times
-    -V, --version    Prints version information
+    -g, --graph            Display graph using gnuplot
+    -h, --help             Prints help information
+    -t, --print-gnuplot    Just print gnuplot script
+    -v, --verbose          A level of verbosity, and can be used multiple times
+    -V, --version          Prints version information
 
 OPTIONS:
     -d, --duration <duration>    Duration for observation
