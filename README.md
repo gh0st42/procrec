@@ -17,7 +17,7 @@ $ git clone https://github.com/gh0st42/procrec
 $ cargo install --path .
 ```
 
-If you want plotting functionality you also need to install gnuplot via your package manager (e.g., `sudo apt install gnuplot`).
+If you want plotting functionality you also need to install gnuplot via your package manager (e.g., `sudo apt install gnuplot` or `brew install gnuplot`).
 
 ## Usage
 
