@@ -37,9 +37,9 @@ struct Opts {
     /// Duration for observation
     #[clap(short = "d", long = "duration")]
     duration: Option<u64>,
-    /// Process to be inspected
-    #[clap(short = "p", long = "pid")]
-    pid: u32,
+    /// Process to be inspected. If omitted, then command must be provided.
+    #[clap(short = "p", long = "pid", required_unless_one = &["command"])]
+    pid: Option<u32>,
     /// A level of verbosity, and can be used multiple times
     #[clap(short = "v", long = "verbose", parse(from_occurrences))]
     verbose: i32,
@@ -50,6 +50,10 @@ struct Opts {
     /// Just print gnuplot script
     #[clap(short = "t", long = "print-gnuplot")]
     script_dump: bool,
+
+    /// The command to execute and record. If omitted, then --pid must be provided.
+    #[clap(index = 1, multiple = true, conflicts_with = "pid", required = false, required_unless_one = &["pid"])]
+    command: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -102,6 +106,7 @@ fn gnuplot_recording(recording: &[Sample]) -> Result<()> {
     }
     Ok(())
 }
+
 fn main() {
     let opts: Opts = Opts::parse();
 
@@ -110,9 +115,30 @@ fn main() {
         println!("{}", gnuplot_script_content);
         std::process::exit(0);
     }
+    let mut child : Option<std::process::Child> = None;
 
     // SETUP phase
-    let mut pid_proc = Process::new(opts.pid).expect("Failed accessing process");
+    let mut pid_proc = match opts.pid {
+			Some(pid) => Process::new(pid).expect("Failed accessing process"),
+			None => {
+				let mut cl = opts.command;
+				let mut cmd = Command::new(cl.remove(0));
+				cmd.args(cl);
+
+				let pid;
+				match cmd.spawn() {
+					Ok(c) => {
+						pid = c.id();
+						child = Some(c);
+					},
+					Err(e) => {
+						eprintln!("Can not execute command: {}", e);
+						std::process::exit(1);
+					}
+				}
+				Process::new(pid).expect("Failed accessing process")
+			}
+		};
     let _percent_cpu = pid_proc.cpu_percent();
     let sample_rate = opts.interval * 1000;
 
@@ -128,32 +154,50 @@ fn main() {
     // MAIN phase
     while running.load(Ordering::SeqCst) {
         delay(sample_rate);
-        let percent_cpu = pid_proc.cpu_percent().unwrap();
-        let cur_mem = pid_proc.memory_info().unwrap();
-        let time_since_start = if let Some(time) = start {
-            time.elapsed().unwrap().as_secs_f32()
-        } else {
-            start = Some(time::SystemTime::now());
-            0.0
-        };
-        let data = Sample {
-            ts: time_since_start,
-            pid: pid_proc.pid(),
-            cpu: percent_cpu,
-            rss: cur_mem.rss() / 1000,
-            vsize: cur_mem.vms() / 1000,
-            //num_threads: pid_proc.num_threads(),
-        };
-        if opts.verbose > 0 {
-            println!("{}", data);
-        }
-        recording.push(data);
-        if let Some(dur) = opts.duration {
-            if time_since_start > dur as f32 {
-                break;
-            }
-        }
+				match child.as_mut() {
+					Some(c) => match c.try_wait() {
+						Ok(Some(_)) => { 
+							running.store(false, Ordering::SeqCst);
+						},
+						Ok(None) => { },
+						Err(e) => panic!("Can not check status of child process: {}", e),
+					},
+					_ => {}
+				}
+
+				if pid_proc.is_running() {
+        	let percent_cpu = pid_proc.cpu_percent().unwrap();
+        	let cur_mem = pid_proc.memory_info().unwrap();
+        	let time_since_start = if let Some(time) = start {
+        	    time.elapsed().unwrap().as_secs_f32()
+        	} else {
+        	    start = Some(time::SystemTime::now());
+        	    0.0
+        	};
+        	let data = Sample {
+        	    ts: time_since_start,
+        	    pid: pid_proc.pid(),
+        	    cpu: percent_cpu,
+        	    rss: cur_mem.rss() / 1000,
+        	    vsize: cur_mem.vms() / 1000,
+        	    //num_threads: pid_proc.num_threads(),
+        	};
+        	if opts.verbose > 0 {
+        	    println!("{}", data);
+        	}
+        	recording.push(data);
+        	if let Some(dur) = opts.duration {
+        	    if time_since_start > dur as f32 {
+        	        break;
+        	    }
+        	}
+				}
     }
+
+		match child {
+			Some(mut c) => { c.wait().expect("Can not kill child process"); },
+			None => {}
+		};
 
     // POST phase
     if opts.verbose == 0 {
