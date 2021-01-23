@@ -195,7 +195,7 @@ fn main() {
     }
 
     match child {
-      Some(mut c) => { c.wait().expect("Can not kill child process"); },
+      Some(mut c) => { c.wait().expect("Can not wait for child process"); },
       None => {}
     };
 
