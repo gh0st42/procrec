@@ -37,7 +37,7 @@ struct Opts {
     /// Duration for observation
     #[clap(short = "d", long = "duration")]
     duration: Option<u64>,
-    /// Process to be inspected. If omitted, then command must be provided.
+    /// Process to be inspected. If omitted, a command to execute must be given.
     #[clap(short = "p", long = "pid", required_unless_one = &["command"])]
     pid: Option<u32>,
     /// A level of verbosity, and can be used multiple times
