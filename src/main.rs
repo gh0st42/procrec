@@ -119,26 +119,26 @@ fn main() {
 
     // SETUP phase
     let mut pid_proc = match opts.pid {
-			Some(pid) => Process::new(pid).expect("Failed accessing process"),
-			None => {
-				let mut cl = opts.command;
-				let mut cmd = Command::new(cl.remove(0));
-				cmd.args(cl);
+      Some(pid) => Process::new(pid).expect("Failed accessing process"),
+      None => {
+        let mut cl = opts.command;
+        let mut cmd = Command::new(cl.remove(0));
+        cmd.args(cl);
 
-				let pid;
-				match cmd.spawn() {
-					Ok(c) => {
-						pid = c.id();
-						child = Some(c);
-					},
-					Err(e) => {
-						eprintln!("Can not execute command: {}", e);
-						std::process::exit(1);
-					}
-				}
-				Process::new(pid).expect("Failed accessing process")
-			}
-		};
+        let pid;
+        match cmd.spawn() {
+          Ok(c) => {
+            pid = c.id();
+            child = Some(c);
+          },
+          Err(e) => {
+            eprintln!("Can not execute command: {}", e);
+            std::process::exit(1);
+          }
+        }
+        Process::new(pid).expect("Failed accessing process")
+      }
+    };
     let _percent_cpu = pid_proc.cpu_percent();
     let sample_rate = opts.interval * 1000;
 
@@ -154,50 +154,50 @@ fn main() {
     // MAIN phase
     while running.load(Ordering::SeqCst) {
         delay(sample_rate);
-				match child.as_mut() {
-					Some(c) => match c.try_wait() {
-						Ok(Some(_)) => { 
-							running.store(false, Ordering::SeqCst);
-						},
-						Ok(None) => { },
-						Err(e) => panic!("Can not check status of child process: {}", e),
-					},
-					_ => {}
-				}
+        match child.as_mut() {
+          Some(c) => match c.try_wait() {
+            Ok(Some(_)) => { 
+              running.store(false, Ordering::SeqCst);
+            },
+            Ok(None) => { },
+            Err(e) => panic!("Can not check status of child process: {}", e),
+          },
+          _ => {}
+        }
 
-				if pid_proc.is_running() {
-        	let percent_cpu = pid_proc.cpu_percent().unwrap();
-        	let cur_mem = pid_proc.memory_info().unwrap();
-        	let time_since_start = if let Some(time) = start {
-        	    time.elapsed().unwrap().as_secs_f32()
-        	} else {
-        	    start = Some(time::SystemTime::now());
-        	    0.0
-        	};
-        	let data = Sample {
-        	    ts: time_since_start,
-        	    pid: pid_proc.pid(),
-        	    cpu: percent_cpu,
-        	    rss: cur_mem.rss() / 1000,
-        	    vsize: cur_mem.vms() / 1000,
-        	    //num_threads: pid_proc.num_threads(),
-        	};
-        	if opts.verbose > 0 {
-        	    println!("{}", data);
-        	}
-        	recording.push(data);
-        	if let Some(dur) = opts.duration {
-        	    if time_since_start > dur as f32 {
-        	        break;
-        	    }
-        	}
-				}
+        if pid_proc.is_running() {
+          let percent_cpu = pid_proc.cpu_percent().unwrap();
+          let cur_mem = pid_proc.memory_info().unwrap();
+          let time_since_start = if let Some(time) = start {
+              time.elapsed().unwrap().as_secs_f32()
+          } else {
+              start = Some(time::SystemTime::now());
+              0.0
+          };
+          let data = Sample {
+              ts: time_since_start,
+              pid: pid_proc.pid(),
+              cpu: percent_cpu,
+              rss: cur_mem.rss() / 1000,
+              vsize: cur_mem.vms() / 1000,
+              //num_threads: pid_proc.num_threads(),
+          };
+          if opts.verbose > 0 {
+              println!("{}", data);
+          }
+          recording.push(data);
+          if let Some(dur) = opts.duration {
+              if time_since_start > dur as f32 {
+                  break;
+              }
+          }
+        }
     }
 
-		match child {
-			Some(mut c) => { c.wait().expect("Can not kill child process"); },
-			None => {}
-		};
+    match child {
+      Some(mut c) => { c.wait().expect("Can not kill child process"); },
+      None => {}
+    };
 
     // POST phase
     if opts.verbose == 0 {
