@@ -38,7 +38,7 @@ struct Opts {
     #[clap(short = 'd', long = "duration")]
     duration: Option<u64>,
     /// Process to be inspected. If omitted, a command to execute must be given.
-    #[clap(short = 'p', long = "pid", required_unless_one = &["command"])]
+    #[clap(short = 'p', long = "pid", required_unless_present = "command")]
     pid: Option<u32>,
     /// A level of verbosity, and can be used multiple times
     #[clap(short = 'v', long = "verbose", parse(from_occurrences))]
@@ -52,7 +52,7 @@ struct Opts {
     script_dump: bool,
 
     /// The command to execute and record. If omitted, then --pid must be provided.
-    #[clap(index = 1, multiple = true, conflicts_with = "pid", required = false, required_unless_one = &["pid"])]
+    #[clap(index = 1, multiple = true, conflicts_with = "pid", required = false, required_unless_present = "pid")]
     command: Vec<String>,
 }
 
