@@ -32,23 +32,23 @@ use tempfile::NamedTempFile;
 #[clap(version = crate_version!(), author = crate_authors!())]
 struct Opts {
     /// Sampling interval in seconds
-    #[clap(short = "i", long = "interval", default_value = "2")]
+    #[clap(short = 'i', long = "interval", default_value = "2")]
     interval: u64,
     /// Duration for observation
-    #[clap(short = "d", long = "duration")]
+    #[clap(short = 'd', long = "duration")]
     duration: Option<u64>,
     /// Process to be inspected. If omitted, a command to execute must be given.
-    #[clap(short = "p", long = "pid", required_unless_one = &["command"])]
+    #[clap(short = 'p', long = "pid", required_unless_one = &["command"])]
     pid: Option<u32>,
     /// A level of verbosity, and can be used multiple times
-    #[clap(short = "v", long = "verbose", parse(from_occurrences))]
+    #[clap(short = 'v', long = "verbose", parse(from_occurrences))]
     verbose: i32,
 
     /// Display graph using gnuplot
-    #[clap(short = "g", long = "graph")]
+    #[clap(short = 'g', long = "graph")]
     graph: bool,
     /// Just print gnuplot script
-    #[clap(short = "t", long = "print-gnuplot")]
+    #[clap(short = 't', long = "print-gnuplot")]
     script_dump: bool,
 
     /// The command to execute and record. If omitted, then --pid must be provided.
