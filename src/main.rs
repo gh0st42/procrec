@@ -53,7 +53,7 @@ struct Opts {
     script_dump: bool,
 
     /// The command to execute and record. If omitted, then --pid must be provided.
-    #[clap(index = 1, multiple = true, conflicts_with = "pid", required = false, required_unless_present = "pid")]
+    #[clap(index = 1, multiple = true, conflicts_with = "pid")]
     command: Vec<String>,
 }
 
@@ -126,17 +126,6 @@ impl<'a> TryFrom<&'a Opts> for TrackedProcess {
   }
 }
 
-impl Deref for TrackedProcess {
-    type Target = Process;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-          TrackedProcess::Internal(p, _) => &p,
-          TrackedProcess::External(p) => &p
-        }
-    }
-}
-
 impl TrackedProcess {
   /// Wraps around the internal process.cpu_percent() because
   /// value needs to be mutable.
@@ -151,24 +140,43 @@ impl TrackedProcess {
   pub fn is_running(&mut self) -> bool {
     match self {
       // For an internal process, check if we can join the child-process
-			// unless the child-process is joined, it will be reported it as "running"
+			// Unless the child-process is joined, it will be reported as "running"
       TrackedProcess::Internal(_, ref mut c) => match c.try_wait() {
-        Err(e) => panic!("Can not check status of child process: {}", e),
-        Ok(Some(_)) => false,
+        Err(e) => panic!("Can not check if child process can be joined: {}", e),
+        Ok(Some(_exit_status)) => false, // exit status is irrelevant for the tracking
         Ok(None) => true
       },
       // For external process, rely on psutils to check process status
       TrackedProcess::External(p) => p.is_running()
     }
   }
+}
 
-  /// Check if the tracked process is still running
-  pub fn wait(self) {
-    if let TrackedProcess::Internal(_, mut c) = self {
-        c.kill().expect("Can not send termination command to child process");
-        c.wait().expect("Can not join the child process after killing it");
+impl Deref for TrackedProcess {
+    type Target = Process;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+          TrackedProcess::Internal(p, _) => &p,
+          TrackedProcess::External(p) => &p
+        }
     }
-  }
+}
+
+// Implement a custom handler to clean up the child-process of an internal process
+impl Drop for TrackedProcess {
+	fn drop(&mut self) {
+		// If we have forked a child process, we need to kill and clean up
+		if self.is_running() {
+    	if let TrackedProcess::Internal(_, ref mut c) = self {
+        if let Err(e) = c.kill() {
+					eprintln!("Warning: can not kill child process: {}", e);
+				} else if let Err(e) = c.wait() {
+        	eprintln!("Warning: Can not join the child process after killing it: {}", e);
+				}
+			}
+    }
+	}
 }
 
 
@@ -227,6 +235,7 @@ fn main() {
         r.store(false, Ordering::SeqCst);
     })
     .expect("Error setting Ctrl-C handler");
+
     // MAIN phase
     while running.load(Ordering::SeqCst) {
       delay(sample_rate);
@@ -262,9 +271,6 @@ fn main() {
         }
     }
 
-    // Clean up child processes
-    pid_proc.wait();
-    
     // POST phase
     if opts.verbose == 0 {
         for i in &recording {
