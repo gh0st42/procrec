@@ -103,7 +103,7 @@ impl<'a> TryFrom<&'a Opts> for TrackedProcess {
        None => {
          let cl = &opts.command;
          if cl.len() == 0 {
-           return Err("Process to track must be provided as additional arguments or via '--pid' parameter, see --help for detailed information".to_owned())
+           return Err("Process to record must be provided as additional argument or via '--pid' parameter. For detailed information, execute with --help".to_owned())
          }
            
          // Create the command line for the process to be executed
