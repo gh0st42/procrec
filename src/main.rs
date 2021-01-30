@@ -39,7 +39,7 @@ struct Opts {
     #[clap(short = 'd', long = "duration")]
     duration: Option<u64>,
     /// Process to be inspected. If omitted, a command to execute must be given.
-    #[clap(short = 'p', long = "pid", required_unless_present = "command")]
+    #[clap(short = 'p', long = "pid", conflicts_with = "command")]
     pid: Option<u32>,
     /// A level of verbosity, and can be used multiple times
     #[clap(short = 'v', long = "verbose", parse(from_occurrences))]
@@ -103,7 +103,7 @@ impl<'a> TryFrom<&'a Opts> for TrackedProcess {
        None => {
          let cl = &opts.command;
          if cl.len() == 0 {
-           return Err("Either --pid or command must be given".to_owned())
+           return Err("Process to track must be provided as additional arguments or via '--pid' parameter, see --help for detailed information".to_owned())
          }
            
          // Create the command line for the process to be executed
@@ -221,7 +221,14 @@ fn main() {
     }
 
     // Initialize the tracking process
-    let mut pid_proc = TrackedProcess::try_from(&opts).expect("Can not greated tracked process");
+    let mut pid_proc = match TrackedProcess::try_from(&opts) {
+			Err(e) => { 
+				eprintln!("Error: {}", e);
+				std::process::exit(1);
+			}, 
+			Ok(p) => p
+		};
+
     // Fetch the CPU one time set the "baseline"
     let _percent_cpu = pid_proc.cpu_percent();
     let sample_rate = opts.interval * 1000;
