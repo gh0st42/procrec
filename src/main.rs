@@ -154,15 +154,14 @@ fn main() {
     // MAIN phase
     while running.load(Ordering::SeqCst) {
         delay(sample_rate);
-        match child.as_mut() {
-          Some(c) => match c.try_wait() {
+				if let Some(c) = child.as_mut() {
+          match c.try_wait() {
             Ok(Some(_)) => { 
               running.store(false, Ordering::SeqCst);
             },
             Ok(None) => { },
             Err(e) => panic!("Can not check status of child process: {}", e),
-          },
-          _ => {}
+          }
         }
 
         if pid_proc.is_running() {
@@ -194,9 +193,8 @@ fn main() {
         }
     }
 
-    match child {
-      Some(mut c) => { c.wait().expect("Can not wait for child process"); },
-      None => {}
+    if let Some(mut c) = child {
+      c.wait().expect("Can not wait for child process");
     };
 
     // POST phase
