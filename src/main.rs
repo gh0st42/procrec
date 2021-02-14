@@ -14,19 +14,20 @@
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <http://www.gnu.org/licenses/>.
 
+use anyhow::{anyhow, bail, Result};
 use clap::{crate_authors, crate_version, Clap};
 use ctrlc;
 use psutil::process::Process;
+use std::convert::TryFrom;
 use std::fmt;
 use std::io::{self, Write};
+use std::ops::Deref;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::{thread, time};
 use tempfile::NamedTempFile;
-use std::convert::TryFrom;
-use std::ops::Deref;
 
 /// Process recorder to log cpu utilization and memory consumption.
 #[derive(Clap)]
@@ -80,76 +81,76 @@ impl fmt::Display for Sample {
 /// Define a struct to carry the information about the process
 /// to track. The process can be either external or internal.
 ///
-/// This enum dereferences to the psutil::Process to gather information 
+/// This enum dereferences to the psutil::Process to gather information
 /// about system usage.
 pub enum TrackedProcess {
-  /// An external process was started outside of this program and
-  /// submitted using the --pid parameter.
-  External(Process),
-  /// An internal process is started by procrec as a fork and requires
-  /// joining the forked process.
-  Internal(Process, std::process::Child)
+    /// An external process was started outside of this program and
+    /// submitted using the --pid parameter.
+    External(Process),
+    /// An internal process is started by procrec as a fork and requires
+    /// joining the forked process.
+    Internal(Process, std::process::Child),
 }
 
 impl<'a> TryFrom<&'a Opts> for TrackedProcess {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(opts: &'a Opts) -> Result<Self, Self::Error> {
-     match opts.pid {
-       Some(pid) => match Process::new(pid) {
-         Ok(p) => Ok(TrackedProcess::External(p)),
-         Err(e) => Err(format!("Failed accessing process: {}", e))
-       },
-       None => {
-         let cl = &opts.command;
-         if cl.len() == 0 {
-           return Err("Process to record must be provided as additional argument or via '--pid' parameter. For detailed information, execute with --help".to_owned())
-         }
-           
-         // Create the command line for the process to be executed
-         let mut cmd = Command::new(cl[0].clone());
-         if cl.len() > 1 {
-           cmd.args(&cl[1..]);
-         }
-       
-         match cmd.spawn() {
-           Ok(c) => match Process::new(c.id()) {
-               Ok(p) => Ok(TrackedProcess::Internal(p, c)),
-               Err(e) => Err(format!("Failed access created process: {}", e))
+        match opts.pid {
+            Some(pid) => match Process::new(pid) {
+                Ok(p) => Ok(TrackedProcess::External(p)),
+                Err(e) => Err(anyhow!("Failed accessing process: {}", e)),
             },
-           Err(e) => {
-             return Err(format!("Can not execute command: {}", e));
-           }
-          }
-       }
+            None => {
+                let cl = &opts.command;
+                if cl.len() == 0 {
+                    bail!("Process to record must be provided as additional argument or via '--pid' parameter. For detailed information, execute with --help");
+                }
+
+                // Create the command line for the process to be executed
+                let mut cmd = Command::new(cl[0].clone());
+                if cl.len() > 1 {
+                    cmd.args(&cl[1..]);
+                }
+
+                match cmd.spawn() {
+                    Ok(c) => match Process::new(c.id()) {
+                        Ok(p) => Ok(TrackedProcess::Internal(p, c)),
+                        Err(e) => Err(anyhow!("Failed access created process: {}", e)),
+                    },
+                    Err(e) => {
+                        bail!("Can not execute command: {}", e);
+                    }
+                }
+            }
+        }
     }
-  }
 }
 
 impl TrackedProcess {
-  /// Wraps around the internal process.cpu_percent() because
-  /// value needs to be mutable.
-  pub fn cpu_percent(&mut self) -> psutil::process::ProcessResult<psutil::Percent> {
-    match self {
-      TrackedProcess::External(p) => p.cpu_percent(),
-      TrackedProcess::Internal(p, _) => p.cpu_percent()
+    /// Wraps around the internal process.cpu_percent() because
+    /// value needs to be mutable.
+    pub fn cpu_percent(&mut self) -> psutil::process::ProcessResult<psutil::Percent> {
+        match self {
+            TrackedProcess::External(p) => p.cpu_percent(),
+            TrackedProcess::Internal(p, _) => p.cpu_percent(),
+        }
     }
-  }
 
-  /// Check if the tracked process is still running
-  pub fn is_running(&mut self) -> bool {
-    match self {
-      // For an internal process, check if we can join the child-process
-			// Unless the child-process is joined, it will be reported as "running"
-      TrackedProcess::Internal(_, ref mut c) => match c.try_wait() {
-        Err(e) => panic!("Can not check if child process can be joined: {}", e),
-        Ok(Some(_exit_status)) => false, // exit status is irrelevant for the tracking
-        Ok(None) => true
-      },
-      // For external process, rely on psutils to check process status
-      TrackedProcess::External(p) => p.is_running()
+    /// Check if the tracked process is still running
+    pub fn is_running(&mut self) -> bool {
+        match self {
+            // For an internal process, check if we can join the child-process
+            // Unless the child-process is joined, it will be reported as "running"
+            TrackedProcess::Internal(_, ref mut c) => match c.try_wait() {
+                Err(e) => panic!("Can not check if child process can be joined: {}", e),
+                Ok(Some(_exit_status)) => false, // exit status is irrelevant for the tracking
+                Ok(None) => true,
+            },
+            // For external process, rely on psutils to check process status
+            TrackedProcess::External(p) => p.is_running(),
+        }
     }
-  }
 }
 
 impl Deref for TrackedProcess {
@@ -157,28 +158,30 @@ impl Deref for TrackedProcess {
 
     fn deref(&self) -> &Self::Target {
         match self {
-          TrackedProcess::Internal(p, _) => &p,
-          TrackedProcess::External(p) => &p
+            TrackedProcess::Internal(p, _) => &p,
+            TrackedProcess::External(p) => &p,
         }
     }
 }
 
 // Implement a custom handler to clean up the child-process of an internal process
 impl Drop for TrackedProcess {
-	fn drop(&mut self) {
-		// If we have forked a child process, we need to kill and clean up
-		if self.is_running() {
-    	if let TrackedProcess::Internal(_, ref mut c) = self {
-        if let Err(e) = c.kill() {
-					eprintln!("Warning: can not kill child process: {}", e);
-				} else if let Err(e) = c.wait() {
-        	eprintln!("Warning: Can not join the child process after killing it: {}", e);
-				}
-			}
+    fn drop(&mut self) {
+        // If we have forked a child process, we need to kill and clean up
+        if self.is_running() {
+            if let TrackedProcess::Internal(_, ref mut c) = self {
+                if let Err(e) = c.kill() {
+                    eprintln!("Warning: can not kill child process: {}", e);
+                } else if let Err(e) = c.wait() {
+                    eprintln!(
+                        "Warning: Can not join the child process after killing it: {}",
+                        e
+                    );
+                }
+            }
+        }
     }
-	}
 }
-
 
 fn delay(millis: u64) {
     let timeout = time::Duration::from_millis(millis);
@@ -211,7 +214,7 @@ fn gnuplot_recording(recording: &[Sample]) -> io::Result<()> {
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
 
     if opts.script_dump {
@@ -221,13 +224,7 @@ fn main() {
     }
 
     // Initialize the tracking process
-    let mut pid_proc = match TrackedProcess::try_from(&opts) {
-			Err(e) => { 
-				eprintln!("Error: {}", e);
-				std::process::exit(1);
-			}, 
-			Ok(p) => p
-		};
+    let mut pid_proc = TrackedProcess::try_from(&opts)?;
 
     // Fetch the CPU one time set the "baseline"
     let _percent_cpu = pid_proc.cpu_percent();
@@ -245,36 +242,36 @@ fn main() {
 
     // MAIN phase
     while running.load(Ordering::SeqCst) {
-      delay(sample_rate);
+        delay(sample_rate);
 
-      if ! pid_proc.is_running() {
-          running.store(false, Ordering::SeqCst);
+        if !pid_proc.is_running() {
+            running.store(false, Ordering::SeqCst);
         } else {
-          let percent_cpu = pid_proc.cpu_percent().unwrap();
-          let cur_mem = pid_proc.memory_info().unwrap();
-          let time_since_start = if let Some(time) = start {
-              time.elapsed().unwrap().as_secs_f32()
-          } else {
-              start = Some(time::SystemTime::now());
-              0.0
-          };
-          let data = Sample {
-              ts: time_since_start,
-              pid: pid_proc.pid(),
-              cpu: percent_cpu,
-              rss: cur_mem.rss() / 1000,
-              vsize: cur_mem.vms() / 1000,
-              //num_threads: pid_proc.num_threads(),
-          };
-          if opts.verbose > 0 {
-              println!("{}", data);
-          }
-          recording.push(data);
-          if let Some(dur) = opts.duration {
-              if time_since_start > dur as f32 {
-                  break;
-              }
-          }
+            let percent_cpu = pid_proc.cpu_percent()?;
+            let cur_mem = pid_proc.memory_info()?;
+            let time_since_start = if let Some(time) = start {
+                time.elapsed()?.as_secs_f32()
+            } else {
+                start = Some(time::SystemTime::now());
+                0.0
+            };
+            let data = Sample {
+                ts: time_since_start,
+                pid: pid_proc.pid(),
+                cpu: percent_cpu,
+                rss: cur_mem.rss() / 1000,
+                vsize: cur_mem.vms() / 1000,
+                //num_threads: pid_proc.num_threads(),
+            };
+            if opts.verbose > 0 {
+                println!("{}", data);
+            }
+            recording.push(data);
+            if let Some(dur) = opts.duration {
+                if time_since_start > dur as f32 {
+                    break;
+                }
+            }
         }
     }
 
@@ -289,4 +286,5 @@ fn main() {
             println!("Fatal error calling gnuplot: {}", err);
         }
     }
+    Ok(())
 }

@@ -1,6 +1,6 @@
 [package]
 name = "procrec"
-version = "0.2.2"
+version = "0.3.0"
 authors = ["Lars Baumgaertner"]
 description = "Record/Plot cpu and memory usage of processes"
 edition = "2018"
@@ -18,3 +18,4 @@ clap = { git = "https://github.com/clap-rs/clap/", tag = "v3.0.0-beta.2" }
 tempfile = "3.1.0"
 ctrlc = "3.1.4"
 psutil = { version = "3.0.1", default-features = false, features = ["process"] }
+anyhow = "1.0.38"
